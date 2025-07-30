@@ -28,6 +28,7 @@ class VGCMonitorGUI:
         self.setup_ui()
         self.apply_theme("Default")
         self.update_status()
+        self.start_auto_refresh()
         
     def setup_themes(self):
         self.themes = {
@@ -235,6 +236,16 @@ class VGCMonitorGUI:
     
     def is_vgc_running(self):
         try:
+            result = subprocess.run(["sc", "query", "vgc"], 
+                                  capture_output=True, text=True, shell=True)
+            
+            if result.returncode == 0:
+                output = result.stdout.lower()
+                if "running" in output:
+                    return True
+                elif "stopped" in output:
+                    return False
+            
             for process in psutil.process_iter(['name']):
                 if process.info['name'] and 'vgc' in process.info['name'].lower():
                     return True
@@ -274,26 +285,29 @@ class VGCMonitorGUI:
         else:
             self.service_status_var.set("❌ VGC is Not Running")
         
+        self.root.after(100, lambda: None)
+        
         return is_running
     
     def monitor_loop(self):
         while self.monitoring:
             try:
-                is_running = self.update_status()
+                self.root.after(0, self.update_status)
+                is_running = self.is_vgc_running()
                 
                 if not is_running:
-                    self.log_message("VGC service not running - attempting to start")
+                    self.root.after(0, lambda: self.log_message("VGC service not running - attempting to start"))
                     if self.start_vgc_service():
                         time.sleep(2)
                         if self.is_vgc_running():
-                            self.log_message("VGC service started successfully")
+                            self.root.after(0, lambda: self.log_message("VGC service started successfully"))
                         else:
-                            self.log_message("VGC service start may have failed")
+                            self.root.after(0, lambda: self.log_message("VGC service start may have failed"))
                 
                 time.sleep(1)
                 
             except Exception as e:
-                self.log_message(f"Monitor loop error: {e}")
+                self.root.after(0, lambda: self.log_message(f"Monitor loop error: {e}"))
                 time.sleep(5)
     
     def start_monitoring(self):
@@ -346,6 +360,11 @@ class VGCMonitorGUI:
         if self.monitoring:
             self.stop_monitoring()
         self.root.destroy()
+    
+    def start_auto_refresh(self):
+        if not self.monitoring:
+            self.update_status()
+        self.root.after(2000, self.start_auto_refresh)
 
 def main():
     app = VGCMonitorGUI()
