@@ -22,7 +22,7 @@
 </ul>
 <hr />
 <h2 id="screenshot">🖥️ Screenshot</h2>
-<p><img src="https://github.com/hudulovhamzat0/vgc-guardian/blob/main/ss.png" alt="Screenshot of VGC Guardian" /></p>
+<p><img src="https://github.com/hudulovhamzat0/vgc-guardian/blob/main/ss.gif" alt="Screenshot of VGC Guardian" /></p>
 <p><em>VGC Guardian running with a dark theme, monitoring the VGC service.</em></p>
 <hr />
 <h2 id="requirements">📋 Requirements</h2>
