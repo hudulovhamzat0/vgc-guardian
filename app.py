@@ -89,34 +89,70 @@ class VGCMonitorGUI:
         # Configure root window
         self.root.configure(bg=theme["bg"])
         
-        # Configure styles with modern look
-        self.style.configure("Card.TFrame", 
-                           background=theme["card_bg"], 
-                           relief="solid", 
-                           borderwidth=1,
-                           bd=1)
+        # Update all UI elements dynamically
+        self.update_all_widgets_theme(theme)
         
-        self.style.configure("Header.TLabel", 
-                           background=theme["bg"], 
-                           foreground=theme["fg"],
-                           font=('Segoe UI', 18, 'bold'))
+        # Update theme variable
+        if hasattr(self, 'theme_var'):
+            self.theme_var.set(theme_name)
+    
+    def update_all_widgets_theme(self, theme):
+        """Recursively update all widgets with new theme colors"""
         
-        self.style.configure("Title.TLabel", 
-                           background=theme["card_bg"], 
-                           foreground=theme["fg"],
-                           font=('Segoe UI', 14, 'bold'))
+        # Get references to specific widgets we know should be main background
+        main_bg_widgets = []
+        if hasattr(self, 'root'):
+            main_bg_widgets.append(self.root)
         
-        self.style.configure("Status.TLabel", 
-                           background=theme["card_bg"], 
-                           foreground=theme["fg"],
-                           font=('Segoe UI', 11))
+        # Find main container and header frame
+        for widget in self.get_all_widgets(self.root):
+            widget_name = str(widget)
+            if 'main_container' in widget_name or 'header_frame' in widget_name:
+                main_bg_widgets.append(widget)
         
-        self.style.configure("Info.TLabel", 
-                           background=theme["card_bg"], 
-                           foreground=theme["fg"],
-                           font=('Segoe UI', 9))
+        # Update all widgets
+        for widget in self.get_all_widgets(self.root):
+            widget_class = widget.winfo_class()
+            
+            if widget_class == 'Frame':
+                # Main container and header get main bg color
+                if widget in main_bg_widgets:
+                    widget.configure(bg=theme["bg"])
+                # Everything else gets card background
+                else:
+                    widget.configure(bg=theme["card_bg"])
+            
+            elif widget_class == 'Label':
+                # Get parent widget to determine background
+                parent = widget.master
+                is_main_bg = parent in main_bg_widgets
+                
+                # Set background based on parent
+                label_bg = theme["bg"] if is_main_bg else theme["card_bg"]
+                
+                # Default text color
+                text_color = theme["fg"]
+                
+                # Special cases for specific labels
+                if hasattr(self, 'service_status_label') and widget == self.service_status_label:
+                    text_color = theme["success"]
+                elif 'last_check_time_label' in str(widget) or (hasattr(self, 'last_check_var') and widget.cget('textvariable') == str(self.last_check_var)):
+                    text_color = theme["warning"]
+                elif 'monitor_status' in str(widget) or (hasattr(self, 'monitor_status_var') and widget.cget('textvariable') == str(self.monitor_status_var)):
+                    text_color = theme["accent"]
+                
+                widget.configure(bg=label_bg, fg=text_color)
+            
+            elif widget_class == 'Text':
+                widget.configure(
+                    bg=theme["card_bg"], 
+                    fg=theme["fg"], 
+                    insertbackground=theme["fg"],
+                    selectbackground=theme["accent"],
+                    selectforeground="white"
+                )
         
-        # Modern button styles
+        # Configure ttk styles
         self.style.configure("Primary.TButton",
                            background=theme["accent"],
                            foreground="white",
@@ -125,7 +161,8 @@ class VGCMonitorGUI:
                            focuscolor="none")
         
         self.style.map("Primary.TButton",
-                      background=[('active', theme["accent"]), ('pressed', theme["accent"])],
+                      background=[('active', self.darken_color(theme["accent"])), 
+                                ('pressed', self.darken_color(theme["accent"]))],
                       foreground=[('active', 'white'), ('pressed', 'white')])
         
         self.style.configure("Success.TButton",
@@ -136,7 +173,8 @@ class VGCMonitorGUI:
                            focuscolor="none")
         
         self.style.map("Success.TButton",
-                      background=[('active', theme["success"]), ('pressed', theme["success"])],
+                      background=[('active', self.darken_color(theme["success"])), 
+                                ('pressed', self.darken_color(theme["success"]))],
                       foreground=[('active', 'white'), ('pressed', 'white')])
         
         self.style.configure("Danger.TButton",
@@ -158,21 +196,35 @@ class VGCMonitorGUI:
                            borderwidth=1,
                            relief="solid")
         
-        # Update text widget if it exists
-        if hasattr(self, 'log_text'):
-            self.log_text.configure(
-                bg=theme["card_bg"], 
-                fg=theme["fg"], 
-                insertbackground=theme["fg"],
-                selectbackground=theme["accent"],
-                selectforeground="white",
-                border=0,
-                relief="flat"
-            )
+        self.style.map("Theme.TCombobox",
+                      fieldbackground=[('readonly', theme["card_bg"])],
+                      selectbackground=[('readonly', theme["accent"])],
+                      selectforeground=[('readonly', 'white')])
+    
+    def get_all_widgets(self, widget):
+        """Recursively get all child widgets"""
+        widgets = [widget]
+        for child in widget.winfo_children():
+            widgets.extend(self.get_all_widgets(child))
+        return widgets
+    
+    def darken_color(self, color):
+        """Darken a hex color by 20% for hover effects"""
+        if color.startswith('#'):
+            color = color[1:]
         
-        # Update theme variable
-        if hasattr(self, 'theme_var'):
-            self.theme_var.set(theme_name)
+        # Convert hex to RGB
+        r = int(color[0:2], 16)
+        g = int(color[2:4], 16) 
+        b = int(color[4:6], 16)
+        
+        # Darken by 20%
+        r = max(0, int(r * 0.8))
+        g = max(0, int(g * 0.8))
+        b = max(0, int(b * 0.8))
+        
+        # Convert back to hex
+        return f"#{r:02x}{g:02x}{b:02x}"
 
     def check_admin(self):
         try:
@@ -181,15 +233,15 @@ class VGCMonitorGUI:
             return False
 
     def setup_ui(self):
-        # Main container
-        main_container = tk.Frame(self.root, bg=self.themes["Gaming Dark"]["bg"])
+        # Main container - ana arka plan rengi
+        main_container = tk.Frame(self.root, bg=self.themes["Gaming Dark"]["bg"], name="main_container")
         main_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
         
-        # Header section
-        header_frame = tk.Frame(main_container, bg=self.themes["Gaming Dark"]["bg"])
+        # Header section - ana arka plan rengi
+        header_frame = tk.Frame(main_container, bg=self.themes["Gaming Dark"]["bg"], name="header_frame")
         header_frame.pack(fill=tk.X, pady=(0, 30))
         
-        # Title with gaming emoji
+        # Title with gaming emoji - ana arka plan
         title_label = tk.Label(header_frame, 
                               text="🎮 VGC SERVICE MONITOR PRO",
                               font=('Segoe UI', 20, 'bold'),
@@ -197,7 +249,7 @@ class VGCMonitorGUI:
                               fg=self.themes["Gaming Dark"]["fg"])
         title_label.pack(side=tk.LEFT)
         
-        # Theme selector in header
+        # Theme selector in header - ana arka plan
         theme_frame = tk.Frame(header_frame, bg=self.themes["Gaming Dark"]["bg"])
         theme_frame.pack(side=tk.RIGHT)
         
@@ -218,7 +270,7 @@ class VGCMonitorGUI:
         theme_combo.pack(side=tk.LEFT)
         theme_combo.bind("<<ComboboxSelected>>", self.on_theme_change)
         
-        # Status card
+        # Status card - kart arka plan rengi
         status_card = tk.Frame(main_container, 
                               bg=self.themes["Gaming Dark"]["card_bg"],
                               relief="solid",
@@ -261,7 +313,7 @@ class VGCMonitorGUI:
                                         fg=self.themes["Gaming Dark"]["warning"])
         last_check_time_label.pack(anchor=tk.W)
         
-        # Monitor control card
+        # Monitor control card - kart arka plan rengi
         monitor_card = tk.Frame(main_container,
                                bg=self.themes["Gaming Dark"]["card_bg"],
                                relief="solid",
@@ -286,7 +338,7 @@ class VGCMonitorGUI:
                                        textvariable=self.monitor_status_var,
                                        font=('Segoe UI', 12, 'bold'),
                                        bg=self.themes["Gaming Dark"]["card_bg"],
-                                       fg=self.themes["Gaming Dark"]["fg"])
+                                       fg=self.themes["Gaming Dark"]["accent"])
         monitor_status_label.pack(anchor=tk.W, pady=(0, 15))
         
         button_frame = tk.Frame(monitor_content, bg=self.themes["Gaming Dark"]["card_bg"])
@@ -307,7 +359,7 @@ class VGCMonitorGUI:
                                      width=20)
         self.stop_button.pack(side=tk.LEFT)
         
-        # Manual control card
+        # Manual control card - kart arka plan rengi
         control_card = tk.Frame(main_container,
                                bg=self.themes["Gaming Dark"]["card_bg"],
                                relief="solid",
@@ -327,11 +379,11 @@ class VGCMonitorGUI:
         control_content = tk.Frame(control_card, bg=self.themes["Gaming Dark"]["card_bg"])
         control_content.pack(fill=tk.X, padx=20, pady=20)
         
-        # Control buttons grid
+        # Control buttons grid - kart arka plan rengi
         button_grid = tk.Frame(control_content, bg=self.themes["Gaming Dark"]["card_bg"])
         button_grid.pack(fill=tk.X)
         
-        # Row 1
+        # Row 1 - kart arka plan rengi
         row1 = tk.Frame(button_grid, bg=self.themes["Gaming Dark"]["card_bg"])
         row1.pack(fill=tk.X, pady=(0, 10))
         
@@ -349,7 +401,7 @@ class VGCMonitorGUI:
                                                 width=18)
         self.restart_service_button.pack(side=tk.LEFT, padx=(0, 15))
         
-        # Row 2
+        # Row 2 - kart arka plan rengi
         row2 = tk.Frame(button_grid, bg=self.themes["Gaming Dark"]["card_bg"])
         row2.pack(fill=tk.X)
         
@@ -367,7 +419,7 @@ class VGCMonitorGUI:
                                               width=18)
         self.check_service_button.pack(side=tk.LEFT)
         
-        # Log card
+        # Log card - kart arka plan rengi
         log_card = tk.Frame(main_container,
                            bg=self.themes["Gaming Dark"]["card_bg"],
                            relief="solid",
@@ -387,7 +439,7 @@ class VGCMonitorGUI:
         log_content = tk.Frame(log_card, bg=self.themes["Gaming Dark"]["card_bg"])
         log_content.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
         
-        # Log text with scrollbar
+        # Log text with scrollbar - kart arka plan rengi
         log_container = tk.Frame(log_content, bg=self.themes["Gaming Dark"]["card_bg"])
         log_container.pack(fill=tk.BOTH, expand=True)
         
@@ -409,7 +461,7 @@ class VGCMonitorGUI:
         self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # Admin warning
+        # Admin warning - kart arka plan rengi
         if not self.is_admin:
             warning_card = tk.Frame(main_container,
                                    bg="#dc3545",
